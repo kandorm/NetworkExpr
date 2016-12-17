@@ -57,6 +57,25 @@ int main(int argc, char** argv) {
 			continue;
 		}
 		std::cout << "Receive command : " << recvBuffer << std::endl;
+
+		if (recvMsg.substr(0, 3).equals("get")) {
+			std::string fileName = recvMsg.substr(4);
+			char filePath[MAX_SIZE];
+			std::string filePath = std::string(getcwd(filePath, sizeof(filePath))) + "/" + fileName;
+			std::cout << "get " << filePath << std::endl;
+			FILE fin* = fopen(filePath.c_str(), "rb");
+			if (fin == NULL) {
+				string response = "get fail";
+				int sendLength = send(commnadSocket, response, strlen(response), 0);
+				if (sendLength != strlen(response)) {
+					std::cout << "Response get to client failed!" << std::endl;
+					exit(0);
+				}
+			}
+			else {
+				string response
+			}
+		}
 	}
 
 
