@@ -2,48 +2,61 @@
 #include <arpa/inet.h> //htons
 #include <sys/socket.h> //inet_pton
 #include <string.h> //memset
+#include <errno.h>
 
+#define MAX_SIZE 4096
+#define HOST_PORT 21
+#define DATA_SEND_PORT 20
+#define SOCKET_ERROR -1
 
 int main(int argc, char** argv) {
-	//输入合法性检查
-	if (argc != 4) {
-		std::cout << "Usage:client <address> <port> <filename>" << std::endl;
-		return 0;
+
+	int listenSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if (listerSocket == SOCKET_ERROR) {
+		std::cout << "Create server socket failed!" << std::endl;
+		exit(0);
 	}
-	//设置socket地址结构
+
+	//set host address
 	struct sockaddr_in serverAddr;
 	memset(serverAddr, 0, sizeof(serverAddr));
 	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_port = htons(atoi(argv[2]));
-	if (inet_pton(AF_INFT, argv[1], &serverAddr.sin_addr) == 0) {
-		std::cout << "IP Address error" << std::endl;
-		return 0;
+	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	serverAddr.sin_port = htons(HOST_PORT);
+
+	//bind socket and address
+	if (bind(listerSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+		std::cout << "Bind to local host failed!" << endl;
+		exit(0);
 	}
 
-	//分配资源，建立socket
-	int commandSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if (commandSocket < 0) {
-		cout << "File to create a command socket!" << std::endl;
-		return 0;
+	if (listen(listenSocket, DATA_SEND_PORT) == SOCKET_ERROR) {
+		std::cout << "Error listening on socket.\n" << std::endl;
+		exit(0);
 	}
 
-	int dataSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if (dataSocket < 0) {
-		cout << "Fail to create a data socket!" << std::endl;
-		return 0;
+	while (true) {
+		int commandSocket;
+		if ((commandSocket = accept(listenSocket, NULL, NULL)) == SOCKET_ERROR) {
+			std::cout << "Accept command socket failed!" << std:endl;
+			exit(0);
+		}
+
+		char recvBuffer[MAX_SIZE];
+		std::string recvMsg = "";
+		int recvLength = 0;
+		memeset(recvBuffer, '\0', sizeof(recvBuffer));
+		while ((recvLength = recv(commandSocket, recvBuffer, sizeof(recvBuffer), 0)) > 0) {
+			recvMsg += std::string(recvBuffer);
+			memset(recvBuffer, '\0', sizeof(recvBuffer));
+		}
+		if (recvLength < 0) {
+			std::cout << "Receive client command error!" << std::endl;
+			continue;
+		}
+		std::cout << "Receive command : " << recvBuffer << std::endl;
 	}
 
-	//与远端服务器建立TCP连接
-	int ret; //记录connect错误码
-	if ((ret = connect(commandSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr))) == -1) {
-		std::cout << "Command socket connect to server failed!" << std::endl;
-		return 0;
-	}
-
-	if ((ret = connect(dataSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr))) == -1) {
-		std::cout << "Data socket connect to server failed!" << std::endl;
-		return 0;
-	}
 
 
 
