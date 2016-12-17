@@ -1,14 +1,15 @@
 #include <netinet/in.h>  //sockaddr_in
 #include <arpa/inet.h> //htons
 #include <sys/socket.h> //inet_pton
-#include <string.h> //memset
-#include <errno.h>
-#include <iostream> //cout
+#include <string.h> //memset string
+#include <iostream>  //cout
+#include <unistd.h>  //getcwd
 #include <stdlib.h>
 
 #define MAX_SIZE 4096
 #define HOST_PORT 21
 #define DATA_SEND_PORT 20
+#define BACKLOG 10
 #define SOCKET_ERROR -1
 
 int main(int argc, char** argv) {
@@ -32,17 +33,21 @@ int main(int argc, char** argv) {
 		exit(0);
 	}
 
-	if (listen(listenSocket, DATA_SEND_PORT) == SOCKET_ERROR) {
+	if (listen(listenSocket, BACKLOG) == SOCKET_ERROR) {
 		std::cout << "Error listening on socket.\n" << std::endl;
 		exit(0);
 	}
 
 	while (true) {
+		struct sockaddr_in clientAddr;
+		socklen_t addrLength = sizeof(clientAddr);
 		int commandSocket;
-		if ((commandSocket = accept(listenSocket, NULL, NULL)) == SOCKET_ERROR) {
+		if ((commandSocket = accept(listenSocket, (struct sockaddr*)&clientAddr, &addrLength)) == SOCKET_ERROR) {
 			std::cout << "Accept command socket failed!" << std::endl;
 			exit(0);
 		}
+
+
 
 		char recvBuffer[MAX_SIZE];
 		std::string recvMsg = "";
@@ -58,23 +63,77 @@ int main(int argc, char** argv) {
 		}
 		std::cout << "Receive command : " << recvBuffer << std::endl;
 
-		if (recvMsg.substr(0, 3).equals("get")) {
+		if (strcmp(recvMsg.substr(0, 3).c_str(), "get") == 0) {
 			std::string fileName = recvMsg.substr(4);
-			char filePath[MAX_SIZE];
-			std::string filePath = std::string(getcwd(filePath, sizeof(filePath))) + "/" + fileName;
+			char path[MAX_SIZE];
+			getcwd(path, sizeof(path));
+			std::string filePath = std::string(path) + "/" + fileName;
 			std::cout << "get " << filePath << std::endl;
-			FILE fin* = fopen(filePath.c_str(), "rb");
+			FILE* fin = fopen(filePath.c_str(), "rb");
 			if (fin == NULL) {
-				string response = "get fail";
-				int sendLength = send(commnadSocket, response, strlen(response), 0);
-				if (sendLength != strlen(response)) {
+				std::string response = "get fail";
+				int sendLength = send(commandSocket, response.c_str(), strlen(response.c_str()), 0);
+				if (sendLength != strlen(response.c_str())) {
 					std::cout << "Response get to client failed!" << std::endl;
 					exit(0);
 				}
 			}
 			else {
-				string response
+				std::string response = "get ";
+				response += fileName;
+				int sendLength = send(commandSocket, response.c_str(), strlen(response.c_str()), 0);
+				if (sendLength != strlen(response.c_str())) {
+					std::cout << "Response get to client failed!" << std::endl;
+					exit(0);
+				}
+
+				std::string data = "";
+				char fbuffer[MAX_SIZE];
+				while(fread(fbuffer, sizeof(char), MAX_SIZE, fin) != 0) {
+					data += std::string(fbuffer);
+				}
+				fclose(fin);
+
+				std::cout << "Data of file : " << data << std::endl;
+				int dataLength = send(dataSocket, data.c_str(), strlen(data.c_str()), 0);
+				if (dataLength != strlen(data.c_str())) {
+					std::cout << "Response get to client failed!" << std::endl;
+					exit(0);
+				}
+				std::cout << "get file successful!" << std::endl;
+
 			}
+		}
+		else if(strcmp(recvMsg.substr(0, 3).c_str(), "put") == 0) {
+			std::string fileName = recvMsg.substr(4);
+			char path[MAX_SIZE];
+			getcwd(path, sizeof(path));
+			std::string filePath = std::string(path) + "/" + fileName;
+			std::cout << "get " << filePath << std::endl;
+			FILE* fin = fopen(filePath.c_str(), "rb");
+
+			std::string response = recvMsg;;
+			int sendLength = send(commandSocket, response.c_str(), strlen(response.c_str()), 0);
+			if (sendLength != strlen(response.c_str())) {
+				std::cout << "Response get to client failed!" << std::endl;
+				exit(0);
+			}
+
+			std::string data = "";
+			char fbuffer[MAX_SIZE];
+			while(fread(fbuffer, sizeof(char), MAX_SIZE, fin) != 0) {
+				data += std::string(fbuffer);
+			}
+			fclose(fin);
+
+			std::cout << "Data of file : " << data << std::endl;
+			int dataLength = send(commandSocket, data.c_str(), strlen(data.c_str()), 0);
+			if (dataLength != strlen(data.c_str())) {
+				std::cout << "Response get to client failed!" << std::endl;
+				exit(0);
+			}
+			std::cout << "get file successful!" << std::endl;
+
 		}
 	}
 
