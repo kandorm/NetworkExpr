@@ -1,9 +1,11 @@
 #include <netinet/in.h>  //sockaddr_in
 #include <arpa/inet.h>   //htons
 #include <sys/socket.h>  //inet_pton
-#include <string>        //memset
+#include <string.h> //memset
 #include <iostream>      //cout
 #include <stdlib.h>
+#include <errno.h>
+#include <stdio.h>
 
 #define MAX_SIZE 4096
 
@@ -11,14 +13,14 @@ int main(int argc, char** argv) {
 	//input check
 	if (argc != 4) {
 		std::cout << "Usage:client <address> <port> <filename>" << std::endl;
-		return 0;
+		exit(0);
 	}
 	//set socket address
 	struct sockaddr_in serverAddr;
-	memset(serverAddr, 0, sizeof(serverAddr));
+	memset(&serverAddr, 0, sizeof(serverAddr));
 	serverAddr.sin_family = AF_INET;
 	serverAddr.sin_port = htons(atoi(argv[2]));
-	if (inet_pton(AF_INFT, argv[1], &serverAddr.sin_addr) == 0) {
+	if (inet_pton(AF_INET, argv[1], &serverAddr.sin_addr) == 0) {
 		std::cout << "IP Address error" << std::endl;
 		return 0;
 	}
@@ -26,13 +28,13 @@ int main(int argc, char** argv) {
 	//create socket
 	int commandSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (commandSocket < 0) {
-		cout << "File to create a command socket!" << std::endl;
+		std::cout << "File to create a command socket!" << std::endl;
 		return 0;
 	}
 
 	int dataSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (dataSocket < 0) {
-		cout << "Fail to create a data socket!" << std::endl;
+		std::cout << "Fail to create a data socket!" << std::endl;
 		return 0;
 	}
 
@@ -57,14 +59,14 @@ int main(int argc, char** argv) {
 		int sendLength = send(commandSocket, sendBuffer, strlen(sendBuffer), 0);
 		if (sendLength != strlen(sendBuffer)) {
 			std::cout << "Send command to server failed!" << std::endl;
-			std::cout << "Please input command again!" << std:endl;
+			std::cout << "Please input command again!" << std::endl;
 			continue;
 		}
 
 		char recvBuffer[MAX_SIZE];
 		std::string recvMsg = "";
 		int recvLength = 0;
-		memeset(recvBuffer, '\0', sizeof(recvBuffer));
+		memset(recvBuffer, '\0', sizeof(recvBuffer));
 		while ((recvLength = recv(commandSocket, recvBuffer, sizeof(recvBuffer), 0)) > 0) {
 			recvMsg += std::string(recvBuffer);
 			memset(recvBuffer, '\0', sizeof(recvBuffer));
