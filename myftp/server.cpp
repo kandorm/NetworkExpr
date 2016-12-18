@@ -5,7 +5,7 @@
 #include <iostream>  //cout
 #include <unistd.h>  //getcwd
 #include <dirent.h> //DIR opendir  dirnet
-
+#include <stdlib.h> //exit
 #define MAX_SIZE 4096
 #define HOST_PORT 8000
 #define BACKLOG 20         //waiting service number
@@ -59,22 +59,26 @@ int main(int argc, char** argv) {
 			std::cout << "Accept command socket failed!" << std::endl;
 			exit(0);
 		}
-
+		std::cout << "Client connect successful!" << std::endl;
 		while(true) {
 			//-------------------receive client command------------------------
 			char recvBuffer[MAX_SIZE];
 			std::string recvMsg = "";
 			int recvLength = 0;
 			memset(recvBuffer, '\0', sizeof(recvBuffer));
+			/*
 			while ((recvLength = recv(commandSocket, recvBuffer, sizeof(recvBuffer), 0)) > 0) {
 				recvMsg += std::string(recvBuffer);
 				memset(recvBuffer, '\0', sizeof(recvBuffer));
 			}
+			*/
+			recvLength = recv(commandSocket, recvBuffer, sizeof(recvBuffer), 0);
 			if (recvLength < 0) {
 				std::cout << "Receive client command error!" << std::endl;
 				continue;
 			}
-			std::cout << "Receive command : " << recvBuffer << std::endl;
+			recvMsg += std::string(recvBuffer);
+			std::cout << "Receive command : " << recvMsg << std::endl;
 
 			//-------------------respone to command----------------------------
 			if (strcmp(recvMsg.substr(0, 1).c_str(), "?") == 0) {
@@ -90,8 +94,8 @@ int main(int argc, char** argv) {
 				sendResponse(commandSocket, response);
 			}
 			else if(strcmp(recvMsg.substr(0, 2).c_str(), "cd") == 0) {
-				if(strcmp(recvMsg.substr(3).c_str(), "..") == 0) {
-					if(path[path.size()-1] == "/") {
+				if(strcmp(recvMsg.substr(3, 2).c_str(), "..") == 0) {
+					if(path[path.size()-1] == '/') {
 						path.erase(path.size()-1);
 					}
 					int pos = path.rfind("/");
@@ -103,13 +107,16 @@ int main(int argc, char** argv) {
 					sendResponse(commandSocket, response);
 				}
 				else {
-					std::string extraPath = recvMsg(4);
+					std::string extraPath = recvMsg.substr(3);
 					std::string tPath = path;
-					if(tPath[tPath.size()-1] != "/") {
+					if(tPath[tPath.size()-1] != '/') {
 						tPath += "/";
 					}
 					tPath += extraPath;
-					if(tPath[tPath.size()-1] == "/") {
+					if(tPath[tPath.size()-1] == '\n') {
+						tPath.erase(tPath.size()-1);
+					}
+					if(tPath[tPath.size()-1] == '/') {
 						tPath.erase(tPath.size()-1);
 					}
 
@@ -129,7 +136,7 @@ int main(int argc, char** argv) {
 				}
 			}
 			else if(strcmp(recvMsg.substr(0, 3).c_str(), "dir") == 0) {
-				if(path[path.size()-1] == "/") {
+				if(path[path.size()-1] == '/') {
 					path.erase(path.size()-1);
 				}
 				DIR* dir = opendir(path.c_str());
@@ -139,7 +146,7 @@ int main(int argc, char** argv) {
 					exit(0);
 				}
 				else {
-					struct dirent* fileName;
+					struct dirent* fileName = NULL;
 					while(fileName = readdir(dir)) {
 						if(strcmp(fileName->d_name, ".") == 0 || strcmp(fileName->d_name, "..") == 0)
 							continue;
@@ -147,13 +154,13 @@ int main(int argc, char** argv) {
 						response += "\n";
 					}
 				}
-				std::cout << response << std::endl;
 				sendResponse(commandSocket, response);
 				closedir(dir);
 			}
 			else if(strcmp(recvMsg.substr(0, 3).c_str(), "pwd") == 0) {
 				std::string response = "pwd ";
-				std::string response += path;
+				response += path;
+				response += "\n";
 				sendResponse(commandSocket, response);
 
 			}

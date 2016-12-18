@@ -3,7 +3,9 @@
 #include <sys/socket.h>  //inet_pton
 #include <string.h>      //memset  string
 #include <iostream>      //cout
-#include <errno.h>
+#include <stdlib.h>      //exit
+#include <stdio.h>		 //stdin
+#include <unistd.h>  //getcwd  close(socket)
 
 #define MAX_SIZE 4096
 #define SOCKET_ERROR -1
@@ -52,20 +54,25 @@ int main(int argc, char** argv) {
 		memset(sendBuffer, '\0', sizeof(sendBuffer));
 		fgets(sendBuffer, sizeof(sendBuffer), stdin);
 		sendResponse(commandSocket, std::string(sendBuffer));
+		std::cout << "Send command successfully!" << std::endl;
 		//---------------------receive response------------------------------------
 		char recvBuffer[MAX_SIZE];
 		std::string recvMsg = "";
 		int recvLength = 0;
 		memset(recvBuffer, '\0', sizeof(recvBuffer));
+		/*
 		while ((recvLength = recv(commandSocket, recvBuffer, sizeof(recvBuffer), 0)) > 0) {
-			recvMsg += std::string(recvBuffer);
+			recvMsg += recvBuffer;
 			memset(recvBuffer, '\0', sizeof(recvBuffer));
 		}
+		*/
+		recvLength = recv(commandSocket, recvBuffer, sizeof(recvBuffer), 0);
 		if (recvLength < 0) {
 			std::cout << "Receive server response error!" << std::endl;
 			std::cout << "Please input command again!" << std::endl;
 			continue;
 		}
+		recvMsg += recvBuffer;
 		//---------------------action to server's message-------------------------
 		if(strcmp(recvMsg.substr(0, 1).c_str(), "?") == 0) {
 			std::cout << recvMsg.substr(4) << std::endl;
