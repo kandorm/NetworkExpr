@@ -4,7 +4,7 @@
 #include <string.h>      //memset  string
 #include <iostream>      //cout
 #include <stdlib.h>      //exit
-#include <stdio.h>		 //stdin
+#include <stdio.h>		 //stdin fread
 #include <unistd.h>  //getcwd  close(socket)
 
 #define MAX_SIZE 4096
@@ -149,6 +149,55 @@ int main(int argc, char** argv) {
 				std::cout << "dataResponse " << dataResponse << std::endl;
 				sendResponse(dataSocket, dataResponse);
 			}
+			close(dataSocket);
+		}
+		else if(strcmp(recvMsg.substr(0, 3).c_str(), "get") == 0) {
+			std::cout << recvMsg << std::endl;
+			int servDtaPort = atoi(recvMsg.substr(4).c_str());
+			//----------------open file failed--------------------------
+			if(servDtaPort == 0) {
+				std::cout << "File is not exit!" << std::endl;
+				continue;
+			}
+			//-----------------create data socket--------------------------
+			int dataSocket = socket(AF_INET, SOCK_STREAM, 0);
+			if(dataSocket == SOCKET_ERROR) {
+				std::cout << "Create data socket failed!" << std::endl;
+				exit(0);
+			}
+
+			struct sockaddr_in servDtaAddr;
+			memset(&servDtaAddr, 0, sizeof(servDtaAddr));
+			servDtaAddr.sin_family = AF_INET;
+			servDtaAddr.sin_port = htons(servDtaPort);
+			servDtaAddr.sin_addr = serverAddr.sin_addr;
+
+			if ((ret = connect(dataSocket, (struct sockaddr*)&servDtaAddr, sizeof(servDtaAddr))) == -1) {
+				std::cout << "Data socket connect to server failed!" << std::endl;
+				exit(0);
+			}
+			std::cout << "Connect to " << argv[1] << " " << servDtaPort << " successfully!" << std::endl;
+			//---------------------write file-------------------------------------
+			if(path[path.size()-1] != '/') {
+				path += '/';
+			}
+			std::string filePath = path + std::string(sendBuffer).substr(4);
+			if(filePath[filePath.size()-1] == '\n') {
+				filePath.erase(filePath.size()-1);
+			}
+			FILE* fout = fopen(filePath.c_str(), "wb");
+			int length = 0;
+			char dataBuffer[MAX_SIZE];
+			memset(dataBuffer, '\0', sizeof(dataBuffer));
+			std::string data = "";
+			while((length = recv(dataSocket, dataBuffer, MAX_SIZE, 0)) > 0) {
+				data += dataBuffer;
+				fwrite(dataBuffer, sizeof(char), length, fout);
+				memset(dataBuffer, '\0', sizeof(dataBuffer));
+			}
+			fclose(fout);
+			std::cout << "Data " << data << std::endl;
+
 			close(dataSocket);
 		}
 		else {
