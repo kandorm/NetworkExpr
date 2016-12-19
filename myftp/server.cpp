@@ -6,8 +6,11 @@
 #include <unistd.h>  //getcwd
 #include <dirent.h> //DIR opendir  dirnet
 #include <stdlib.h> //exit
+#include <stdio.h>  //fopen
+
 #define MAX_SIZE 4096
 #define HOST_PORT 8000
+#define DATA_TRAN_PORT 8001
 #define BACKLOG 20         //waiting service number
 #define SOCKET_ERROR -1
 
@@ -83,8 +86,8 @@ int main(int argc, char** argv) {
 			//-------------------respone to command----------------------------
 			if (strcmp(recvMsg.substr(0, 1).c_str(), "?") == 0) {
 				std::string response = "?   ";
-				response += "get [port] [filename]\n";
-				response += "put [port] [filename]\n";
+				response += "get [filename]\n";
+				response += "put [filename]\n";
 				response += "pwd\n";
 				response += "dir\n";
 				response += "cd\n";
@@ -216,36 +219,73 @@ int main(int argc, char** argv) {
 
 				}
 			}
+			*/
 			else if(strcmp(recvMsg.substr(0, 3).c_str(), "put") == 0) {
+				//-------------------------
 				std::string fileName = recvMsg.substr(4);
-				std::string filePath = std::string(path) + "/" + fileName;
-				std::cout << "get " << filePath << std::endl;
-				FILE* fin = fopen(filePath.c_str(), "rb");
+				std::string filePath = path + "/" + fileName;
+				if(filePath[filePath.size()-1] == '\n') {
+					filePath.erase(filePath.size()-1);
+				}
+				FILE* fout = fopen(filePath.c_str(), "wb");
+				std::cout << "put " << filePath << std::endl;
+				std::string response = "put ";
+				//-------------------------open file failed-----------------------------------
+				if(fout == NULL) {
+					response += "0000";
+					sendResponse(commandSocket, response);
+					continue;
+				}
 
-				std::string response = recvMsg;;
-				int sendLength = send(commandSocket, response.c_str(), strlen(response.c_str()), 0);
-				if (sendLength != strlen(response.c_str())) {
-					std::cout << "Response get to client failed!" << std::endl;
+				///------------------------create server data listen socket------------------------
+				int dataListenSocket = socket(AF_INET, SOCK_STREAM, 0);
+				if (dataListenSocket == SOCKET_ERROR) {
+					std::cout << "Create data listen socket failed!" << std::endl;
+					exit(0);
+				}
+				//set data socket
+				struct sockaddr_in dtaAddr;
+				memset(&dtaAddr, 0, sizeof(dtaAddr));
+				dtaAddr.sin_family = AF_INET;
+				dtaAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+				dtaAddr.sin_port = htons(DATA_TRAN_PORT);
+				//bind socket and address
+				if (bind(dataListenSocket, (struct sockaddr*)&dtaAddr, sizeof(dtaAddr)) == SOCKET_ERROR) {
+					std::cout << "Data socket bind to local host failed!" << std::endl;
 					exit(0);
 				}
 
+				if (listen(dataListenSocket, BACKLOG) == SOCKET_ERROR) {
+					std::cout << "Error listening on data listen socket.\n" << std::endl;
+					exit(0);
+				}
+				std::cout << "Waiting for client connect!" << std::endl;
+				//send server data port to client
+				response += "8001";
+				sendResponse(commandSocket, response);
+
+				int dataSocket;
+				if ((dataSocket = accept(dataListenSocket, NULL, NULL)) == SOCKET_ERROR) {
+					std::cout << "Accept data socket failed!" << std::endl;
+					exit(0);
+				}
+				std::cout << "Client connect successful!" << std::endl;
+
+				int length = 0;
+				char dataBuffer[MAX_SIZE];
+				memset(dataBuffer, '\0', sizeof(dataBuffer));
 				std::string data = "";
-				char fbuffer[MAX_SIZE];
-				while(fread(fbuffer, sizeof(char), MAX_SIZE, fin) != 0) {
-					data += std::string(fbuffer);
+				while((length = recv(dataSocket, dataBuffer, MAX_SIZE, 0)) > 0) {
+					data += dataBuffer;
+					fwrite(dataBuffer, sizeof(char), length, fout);
+					memset(dataBuffer, '\0', sizeof(dataBuffer));
 				}
-				fclose(fin);
-
-				std::cout << "Data of file : " << data << std::endl;
-				int dataLength = send(commandSocket, data.c_str(), strlen(data.c_str()), 0);
-				if (dataLength != strlen(data.c_str())) {
-					std::cout << "Response get to client failed!" << std::endl;
-					exit(0);
-				}
-				std::cout << "get file successful!" << std::endl;
+				fclose(fout);
+				std::cout << "Data " << data << std::endl;
+				close(dataListenSocket);
+				close(dataSocket);
 
 			}
-			*/
 			else {
 				std::cout << "Command illegal!" << std::endl;
 				std::string response = "Command illegal!";

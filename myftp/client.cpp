@@ -43,9 +43,15 @@ int main(int argc, char** argv) {
 	int ret; //connect error number
 	if ((ret = connect(commandSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr))) == -1) {
 		std::cout << "Command socket connect to server failed!" << std::endl;
-		return 0;
+		exit(0);
 	}
-	std::cout << "Connect to" << argv[1] << " " << argv[2] << "successfully!" << std::endl;
+	std::cout << "Connect to " << argv[1] << " " << argv[2] << " successfully!" << std::endl;
+
+	//get file path
+	char pathBuffer[MAX_SIZE];
+	getcwd(pathBuffer, sizeof(pathBuffer));
+	std::string path = std::string(pathBuffer);
+
 	//**************************input command******************************************
 	while (true) {
 		//---------------------send command----------------------------------------
@@ -89,6 +95,61 @@ int main(int argc, char** argv) {
 		else if(strcmp(recvMsg.substr(0, 4).c_str(), "quit") == 0) {
 			std::cout << recvMsg.substr(4) << std::endl;
 			break;
+		}
+		else if(strcmp(recvMsg.substr(0, 3).c_str(), "put") == 0) {
+			std::cout << recvMsg << std::endl;
+			int servDtaPort = atoi(recvMsg.substr(4).c_str());
+			//----------------open file failed--------------------------
+			if(servDtaPort == 0) {
+				std::cout << "Remote create file failed!" << std::endl;
+				continue;
+			}
+			//-----------------create data socket--------------------------
+			int dataSocket = socket(AF_INET, SOCK_STREAM, 0);
+			if(dataSocket == SOCKET_ERROR) {
+				std::cout << "Create data socket failed!" << std::endl;
+				exit(0);
+			}
+
+			struct sockaddr_in servDtaAddr;
+			memset(&servDtaAddr, 0, sizeof(servDtaAddr));
+			servDtaAddr.sin_family = AF_INET;
+			servDtaAddr.sin_port = htons(servDtaPort);
+			servDtaAddr.sin_addr = serverAddr.sin_addr;
+
+			if ((ret = connect(dataSocket, (struct sockaddr*)&servDtaAddr, sizeof(servDtaAddr))) == -1) {
+				std::cout << "Data socket connect to server failed!" << std::endl;
+				exit(0);
+			}
+			std::cout << "Connect to " << argv[1] << " " << servDtaPort << " successfully!" << std::endl;
+			//---------------------read file-------------------------------------
+			if(path[path.size()-1] != '/') {
+				path += '/';
+			}
+			std::string filePath = path + std::string(sendBuffer).substr(4);
+			if(filePath[filePath.size()-1] == '\n') {
+				filePath.erase(filePath.size()-1);
+			}
+			FILE* fin = fopen(filePath.c_str(), "rb");
+			std::string dataResponse = "";
+			if(fin == NULL) {
+				std::cout << "File is not exit!" << std::endl;
+				sendResponse(dataSocket, dataResponse);
+			}
+			else {
+				dataResponse = "";
+				char dataBuffer[MAX_SIZE];
+				memset(dataBuffer, '\0', sizeof(dataBuffer));
+				int length = 0;
+				while( (length = fread(dataBuffer, sizeof(char), MAX_SIZE, fin)) > 0) {
+					dataResponse += dataBuffer;
+					memset(dataBuffer, '\0', sizeof(dataBuffer));
+				}
+				fclose(fin);
+				std::cout << "dataResponse " << dataResponse << std::endl;
+				sendResponse(dataSocket, dataResponse);
+			}
+			close(dataSocket);
 		}
 		else {
 			std::cout << recvMsg << std::endl;
