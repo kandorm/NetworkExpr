@@ -8,15 +8,16 @@
 #include <stdlib.h> //exit
 #include <stdio.h>  //fopen
 #include <time.h>  //time(0)
+#include <errno.h>
 
-#define MAX_SIZE 4096
+#define MAX_SIZE 512
 #define HOST_PORT 8000
 #define BACKLOG 20         //waiting service number
 #define SOCKET_ERROR -1
 
-void sendResponse(int socket, std::string response) {
-	int sendLength = send(socket, response.c_str(), strlen(response.c_str()), 0);
-	if(sendLength != strlen(response.c_str())) {
+void sendResponse(int socket, char* response, int size) {
+	int sendLength = send(socket, response, size, 0);
+	if(sendLength != size) {
 		std::cout << "Response to client failed!" << std::endl;
 		exit(0);
 	}
@@ -77,12 +78,12 @@ int main(int argc, char** argv) {
 			int recvLength = 0;
 			memset(recvBuffer, '\0', sizeof(recvBuffer));
 			/*
-			while ((recvLength = recv(commandSocket, recvBuffer, sizeof(recvBuffer), 0)) > 0) {
-				recvMsg += std::string(recvBuffer);
+			while ((recvLength = recv(commandSocket, recvBuffer, MAX_SIZE, 0)) > 0) {
+				recvMsg += recvBuffer;
 				memset(recvBuffer, '\0', sizeof(recvBuffer));
 			}
 			*/
-			recvLength = recv(commandSocket, recvBuffer, sizeof(recvBuffer), 0);
+			recvLength = recv(commandSocket, recvBuffer, MAX_SIZE, 0);
 			if (recvLength < 0) {
 				std::cout << "Receive client command error!" << std::endl;
 				continue;
@@ -101,7 +102,7 @@ int main(int argc, char** argv) {
 				response += "?\n";
 				response += "quit\n";
 
-				sendResponse(commandSocket, response);
+				sendResponse(commandSocket, (char*)response.c_str(), response.size());
 			}
 			else if(strcmp(recvMsg.substr(0, 2).c_str(), "cd") == 0) {
 				if(strcmp(recvMsg.substr(3, 2).c_str(), "..") == 0) {
@@ -114,7 +115,7 @@ int main(int argc, char** argv) {
 					}
 					std::string response = "cd  ";
 					response += path;
-					sendResponse(commandSocket, response);
+					sendResponse(commandSocket, (char*)response.c_str(), response.size());
 				}
 				else {
 					std::string extraPath = recvMsg.substr(3);
@@ -134,13 +135,13 @@ int main(int argc, char** argv) {
 					if(dir == NULL) {
 						std::string response = "dir ";
 						response += "no such dir";
-						sendResponse(commandSocket, response);
+						sendResponse(commandSocket, (char*)response.c_str(), response.size());
 					}
 					else {
 						path = tPath;
 						std::string response = "dir ";
 						response += path;
-						sendResponse(commandSocket, response);
+						sendResponse(commandSocket, (char*)response.c_str(), response.size());
 						closedir(dir);
 					}
 				}
@@ -164,20 +165,20 @@ int main(int argc, char** argv) {
 						response += "\n";
 					}
 				}
-				sendResponse(commandSocket, response);
+				sendResponse(commandSocket, (char*)response.c_str(), response.size());
 				closedir(dir);
 			}
 			else if(strcmp(recvMsg.substr(0, 3).c_str(), "pwd") == 0) {
 				std::string response = "pwd ";
 				response += path;
 				response += "\n";
-				sendResponse(commandSocket, response);
+				sendResponse(commandSocket, (char*)response.c_str(), response.size());
 
 			}
 			else if(strcmp(recvMsg.substr(0, 4).c_str(), "quit") == 0) {
 				std::string response = "quit";
 				response += "Bye";
-				sendResponse(commandSocket, response);
+				sendResponse(commandSocket, (char*)response.c_str(), response.size());
 				break;
 			}
 			else if(strcmp(recvMsg.substr(0, 3).c_str(), "put") == 0) {
@@ -193,7 +194,7 @@ int main(int argc, char** argv) {
 				//-------------------------open file failed-----------------------------------
 				if(fout == NULL) {
 					response += "0000";
-					sendResponse(commandSocket, response);
+					sendResponse(commandSocket, (char*)response.c_str(), response.size());
 					continue;
 				}
 
@@ -225,7 +226,7 @@ int main(int argc, char** argv) {
 				char port[5];
 				sprintf(port, "%d", dataSocketPort);
 				response += port;
-				sendResponse(commandSocket, response);
+				sendResponse(commandSocket, (char*)response.c_str(), response.size());
 
 				int dataSocket;
 				if ((dataSocket = accept(dataListenSocket, NULL, NULL)) == SOCKET_ERROR) {
@@ -236,15 +237,11 @@ int main(int argc, char** argv) {
 				//-------------------------write file-------------------------------
 				int length = 0;
 				char dataBuffer[MAX_SIZE];
-				memset(dataBuffer, '\0', sizeof(dataBuffer));
-				std::string data = "";
 				while((length = recv(dataSocket, dataBuffer, MAX_SIZE, 0)) > 0) {
-					data += dataBuffer;
 					fwrite(dataBuffer, sizeof(char), length, fout);
-					memset(dataBuffer, '\0', sizeof(dataBuffer));
 				}
 				fclose(fout);
-				std::cout << "Data " << data << std::endl;
+				std::cout << filePath << " receive successfully!" << std::endl;
 				close(dataListenSocket);
 				close(dataSocket);
 
@@ -260,7 +257,7 @@ int main(int argc, char** argv) {
 				std::string response = "get ";
 				if (fin == NULL) {
 					response += "0000";
-					sendResponse(commandSocket, response);
+					sendResponse(commandSocket, (char*)response.c_str(), response.size());
 				}
 				else {
 					///------------------------create server data listen socket------------------------
@@ -292,7 +289,7 @@ int main(int argc, char** argv) {
 					char port[5];
 					sprintf(port, "%d", dataSocketPort);
 					response += port;
-					sendResponse(commandSocket, response);
+					sendResponse(commandSocket, (char*)response.c_str(), response.size());
 
 					int dataSocket;
 					if ((dataSocket = accept(dataListenSocket, NULL, NULL)) == SOCKET_ERROR) {
@@ -301,18 +298,13 @@ int main(int argc, char** argv) {
 					}
 					std::cout << "Client connect successful!" << std::endl;
 					//--------------------read file-----------------------------
-					std::string data = "";
 					char dataBuffer[MAX_SIZE];
-					memset(dataBuffer, '\0', sizeof(dataBuffer));
 					int length = 0;
 					while( (length = fread(dataBuffer, sizeof(char), MAX_SIZE, fin)) > 0) {
-						data += dataBuffer;
-						memset(dataBuffer, '\0', sizeof(dataBuffer));
+						sendResponse(dataSocket, dataBuffer, length);
 					}
 					fclose(fin);
-					std::cout << "Data " << data << std::endl;
-					sendResponse(dataSocket, data);
-
+					std::cout << filePath << " send successfully!" << std::endl;
 					close(dataListenSocket);
 					close(dataSocket);
 				}
@@ -320,7 +312,7 @@ int main(int argc, char** argv) {
 			else {
 				std::cout << "Command illegal!" << std::endl;
 				std::string response = "Command illegal!";
-				sendResponse(commandSocket, response);
+				sendResponse(commandSocket, (char*)response.c_str(), response.size());
 			}
 		}
 		close(commandSocket);

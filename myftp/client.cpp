@@ -6,13 +6,14 @@
 #include <stdlib.h>      //exit
 #include <stdio.h>		 //stdin fread
 #include <unistd.h>  //getcwd  close(socket)
+#include <errno.h>
 
-#define MAX_SIZE 4096
+#define MAX_SIZE 512
 #define SOCKET_ERROR -1
 
-void sendResponse(int commandSocket, std::string response) {
-	int sendLength = send(commandSocket, response.c_str(), strlen(response.c_str()), 0);
-	if(sendLength != strlen(response.c_str())) {
+void sendResponse(int socket, char* response, int size) {
+	int sendLength = send(socket, response, size, 0);
+	if(sendLength != size) {
 		std::cout << "Response to client failed!" << std::endl;
 		exit(0);
 	}
@@ -59,13 +60,12 @@ int main(int argc, char** argv) {
 		char sendBuffer[MAX_SIZE];
 		memset(sendBuffer, '\0', sizeof(sendBuffer));
 		fgets(sendBuffer, sizeof(sendBuffer), stdin);
-		sendResponse(commandSocket, std::string(sendBuffer));
+		sendResponse(commandSocket, sendBuffer, strlen(sendBuffer));
 		std::cout << "Send command successfully!" << std::endl;
 		//---------------------receive response------------------------------------
 		char recvBuffer[MAX_SIZE];
 		std::string recvMsg = "";
 		int recvLength = 0;
-		memset(recvBuffer, '\0', sizeof(recvBuffer));
 		/*
 		while ((recvLength = recv(commandSocket, recvBuffer, sizeof(recvBuffer), 0)) > 0) {
 			recvMsg += recvBuffer;
@@ -73,6 +73,7 @@ int main(int argc, char** argv) {
 		}
 		*/
 		recvLength = recv(commandSocket, recvBuffer, sizeof(recvBuffer), 0);
+		recvBuffer[recvLength] = '\0';
 		if (recvLength < 0) {
 			std::cout << "Receive server response error!" << std::endl;
 			std::cout << "Please input command again!" << std::endl;
@@ -97,7 +98,6 @@ int main(int argc, char** argv) {
 			break;
 		}
 		else if(strcmp(recvMsg.substr(0, 3).c_str(), "put") == 0) {
-			std::cout << recvMsg << std::endl;
 			int servDtaPort = atoi(recvMsg.substr(4).c_str());
 			//----------------open file failed--------------------------
 			if(servDtaPort == 0) {
@@ -130,24 +130,21 @@ int main(int argc, char** argv) {
 			if(filePath[filePath.size()-1] == '\n') {
 				filePath.erase(filePath.size()-1);
 			}
+			//-----------------------read file-----------------------------------
 			FILE* fin = fopen(filePath.c_str(), "rb");
 			std::string dataResponse = "";
 			if(fin == NULL) {
 				std::cout << "File is not exit!" << std::endl;
-				sendResponse(dataSocket, dataResponse);
+				sendResponse(dataSocket, (char*)dataResponse.c_str(), dataResponse.size());
 			}
 			else {
-				dataResponse = "";
 				char dataBuffer[MAX_SIZE];
-				memset(dataBuffer, '\0', sizeof(dataBuffer));
 				int length = 0;
-				while( (length = fread(dataBuffer, sizeof(char), MAX_SIZE, fin)) > 0) {
-					dataResponse += dataBuffer;
-					memset(dataBuffer, '\0', sizeof(dataBuffer));
+				while( (length = fread(dataBuffer, sizeof(char), sizeof(dataBuffer), fin)) > 0) {
+					sendResponse(dataSocket, dataBuffer, length);
 				}
 				fclose(fin);
-				std::cout << "dataResponse " << dataResponse << std::endl;
-				sendResponse(dataSocket, dataResponse);
+				std::cout << filePath << " put successfully!" << std::endl;
 			}
 			close(dataSocket);
 		}
@@ -188,16 +185,11 @@ int main(int argc, char** argv) {
 			FILE* fout = fopen(filePath.c_str(), "wb");
 			int length = 0;
 			char dataBuffer[MAX_SIZE];
-			memset(dataBuffer, '\0', sizeof(dataBuffer));
-			std::string data = "";
 			while((length = recv(dataSocket, dataBuffer, MAX_SIZE, 0)) > 0) {
-				data += dataBuffer;
 				fwrite(dataBuffer, sizeof(char), length, fout);
-				memset(dataBuffer, '\0', sizeof(dataBuffer));
 			}
 			fclose(fout);
-			std::cout << "Data " << data << std::endl;
-
+			std::cout << filePath << " get successfully!" << std::endl;
 			close(dataSocket);
 		}
 		else {
